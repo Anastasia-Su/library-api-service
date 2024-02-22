@@ -1,12 +1,12 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User
-from .serializers import UserSerializer, LogoutSerializer
-from library.models import Profile
+from .serializers import UserSerializer, LogoutSerializer, ProfileSerializer
+from .models import Profile
 
 # from social.permissions import IsLoggedIn
 
@@ -60,3 +60,9 @@ class LogoutView(generics.GenericAPIView):
         except Exception as e:
             print(e)
             return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProfileViewSet(viewsets.ModelViewSet):
+    queryset = Profile.objects.all()
+    serializer_class = ProfileSerializer
+    # permission_classes = (IsAuthenticated,)

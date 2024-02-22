@@ -57,3 +57,37 @@ class User(AbstractUser):
     REQUIRED_FIELDS = []
 
     objects = UserManager()
+
+
+def profile_picture_file_path(instance, filename):
+    _, extension = os.path.splitext(filename)
+    filename = f"{slugify(instance.last_name)}-{uuid.uuid4()}{extension}"
+
+    return os.path.join("uploads/profile/", filename)
+
+
+class Profile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        related_name="profile",
+        on_delete=models.CASCADE,
+        null=True,
+        unique=True,
+    )
+
+    first_name = models.CharField(max_length=255, blank=True)
+    last_name = models.CharField(max_length=255, blank=True)
+    bio = models.TextField(blank=True)
+    image = models.ImageField(
+        null=True, blank=True, upload_to=profile_picture_file_path
+    )
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}"
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({get_user_model().email})"
+
+    class Meta:
+        ordering = ["id", "last_name"]
