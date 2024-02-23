@@ -5,10 +5,16 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User
-from .serializers import UserSerializer, LogoutSerializer, ProfileSerializer
+from .serializers import (
+    UserSerializer,
+    LogoutSerializer,
+    ProfileSerializer,
+    ProfileListSerializer,
+    ProfileDetailSerializer,
+)
 from .models import Profile
 
-# from social.permissions import IsLoggedIn
+from library.permissions import IsCurrentlyLoggedIn, IsAuthenticatedReadOnly
 
 
 class CreateUserView(generics.CreateAPIView):
@@ -42,7 +48,7 @@ class ManageUserView(generics.RetrieveUpdateAPIView):
 
 
 class LogoutView(generics.GenericAPIView):
-    # permission_classes = [IsLoggedIn]
+    permission_classes = [IsCurrentlyLoggedIn]
     serializer_class = LogoutSerializer
 
     def post(self, request):
@@ -65,4 +71,19 @@ class LogoutView(generics.GenericAPIView):
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
-    # permission_classes = (IsAuthenticated,)
+    permission_classes = [IsAuthenticatedReadOnly]
+
+    def get_permissions(self):
+        if self.action in ["update", "destroy"]:
+            return [IsCurrentlyLoggedIn()]
+
+        return [IsAuthenticatedReadOnly()]
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return ProfileListSerializer
+
+        if self.action == "retrieve":
+            return ProfileDetailSerializer
+
+        return ProfileSerializer
