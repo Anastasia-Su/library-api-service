@@ -47,3 +47,18 @@ class ProfileSerializer(serializers.ModelSerializer):
             "bio",
             "image",
         ]
+
+
+class ProfileListSerializer(ProfileSerializer):
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "full_name",
+            "bio",
+            "image",
+        ]
+
+
+class ProfileDetailSerializer(ProfileSerializer):
+    pass

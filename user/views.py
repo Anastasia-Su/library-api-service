@@ -5,7 +5,13 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User
-from .serializers import UserSerializer, LogoutSerializer, ProfileSerializer
+from .serializers import (
+    UserSerializer,
+    LogoutSerializer,
+    ProfileSerializer,
+    ProfileListSerializer,
+    ProfileDetailSerializer,
+)
 from .models import Profile
 
 from library.permissions import IsCurrentlyLoggedIn, IsAuthenticatedReadOnly
@@ -72,3 +78,12 @@ class ProfileViewSet(viewsets.ModelViewSet):
             return [IsCurrentlyLoggedIn()]
 
         return [IsAuthenticatedReadOnly()]
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return ProfileListSerializer
+
+        if self.action == "retrieve":
+            return ProfileDetailSerializer
+
+        return ProfileSerializer
