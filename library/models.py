@@ -18,3 +18,4 @@ class Book(models.Model):
 
     class Meta:
         ordering = ["author", "title"]
+        unique_together = ["author", "title"]
