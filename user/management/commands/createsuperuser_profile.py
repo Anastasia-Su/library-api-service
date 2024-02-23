@@ -2,7 +2,7 @@ from django.contrib.auth.management.commands import createsuperuser
 from django.core.management import CommandError
 from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError
-from social.models import Profile
+from user.models import Profile
 
 
 class Command(createsuperuser.Command):
