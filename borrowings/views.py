@@ -1,5 +1,7 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.response import Response
 
 from .models import Borrowing
 from .serializers import (
@@ -8,6 +10,8 @@ from .serializers import (
     BorrowingDetailSerializer,
 )
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
+
+from library.models import Book
 
 
 class BorrowingViewSet(viewsets.ModelViewSet):
@@ -30,6 +34,26 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             return [IsAdminUser()]
 
         return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+        book_id = request.data.get("book")
+        book_instance = Book.objects.get(pk=book_id)
+
+        if book_instance.inventory > 0:
+            book_instance.inventory -= 1
+            book_instance.save()
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(
+                serializer.data, status=status.HTTP_201_CREATED, headers=headers
+            )
+
+        return Response(
+            {"error": "This book is not currently available"},
+            status=status.HTTP_406_NOT_ACCEPTABLE,
+        )
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
