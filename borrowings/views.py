@@ -1,3 +1,6 @@
+from datetime import datetime, date
+
+from django.db import Error
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -60,3 +63,22 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(user=self.request.user)
+
+    def get_queryset(self):
+        user = self.request.query_params.get("user")
+        is_active = self.request.query_params.get("is_active")
+        queryset = self.queryset
+
+        if user:
+            user_id = int(user)
+            queryset = queryset.filter(user__id=user_id)
+
+        if is_active:
+            if is_active.lower() == "true":
+                queryset = queryset.filter(returned__isnull=True)
+            elif is_active.lower() == "false":
+                queryset = queryset.filter(returned__isnull=False)
+            else:
+                return Borrowing.objects.none()
+
+        return queryset
