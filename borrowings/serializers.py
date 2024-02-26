@@ -9,6 +9,12 @@ class BorrowingSerializer(serializers.ModelSerializer):
         fields = ["id", "book", "borrow_date", "expected_return_date"]
 
 
+class BorrowingReadonlySerializer(BorrowingSerializer):
+    class Meta:
+        model = Borrowing
+        fields = []
+
+
 class BorrowingListSerializer(BorrowingSerializer):
     book = serializers.StringRelatedField(read_only=True)
     user = serializers.SerializerMethodField(read_only=True)
@@ -42,3 +48,11 @@ class BorrowingDetailSerializer(BorrowingSerializer):
             "expected_return_date",
             "returned",
         ]
+
+
+class ReturnActionSerializer(BorrowingSerializer):
+    to_return = serializers.ChoiceField(choices=["I return it"])
+
+    class Meta:
+        model = Borrowing
+        fields = ["to_return"]

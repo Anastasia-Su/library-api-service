@@ -2,6 +2,7 @@ from datetime import datetime, date
 
 from django.db import Error
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
@@ -11,6 +12,8 @@ from .serializers import (
     BorrowingSerializer,
     BorrowingListSerializer,
     BorrowingDetailSerializer,
+    ReturnActionSerializer,
+    BorrowingReadonlySerializer,
 )
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
@@ -23,15 +26,18 @@ class BorrowingViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
+        if not self.request.user.is_authenticated:
+            return BorrowingReadonlySerializer
         if self.action == "list":
             return BorrowingListSerializer
         if self.action == "retrieve":
             return BorrowingDetailSerializer
-
+        if self.action == "return_borrowing":
+            return ReturnActionSerializer
         return BorrowingSerializer
 
     def get_permissions(self):
-        if self.action == "update":
+        if self.action in ["update", "partial_update", "return_borrowing"]:
             return [IsCurrentlyLoggedIn()]
         if self.action == "destroy":
             return [IsAdminUser()]
@@ -63,6 +69,37 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(
+        methods=["POST"],
+        detail=True,
+        url_path="return-borrowing",
+    )
+    def return_borrowing(self, request, pk):
+        """Endpoint for returning a borrowing"""
+        borrowing = self.get_object()
+
+        if request.method == "POST":
+            if borrowing.returned is not None:
+                return Response(
+                    {"error": "This book is already returned"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            borrowing.returned = date.today()
+
+            serializer = self.get_serializer(borrowing, data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            book_id = borrowing.book.id
+            book_instance = Book.objects.get(pk=book_id)
+
+            book_instance.inventory += 1
+            book_instance.save()
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response({"error": "Fail"}, status=status.HTTP_400_BAD_REQUEST)
 
     def get_queryset(self):
         user = self.request.query_params.get("user")
