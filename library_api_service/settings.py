@@ -177,3 +177,7 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
     "ROTATE_REFRESH_TOKENS": True,
 }
+
+TELEGRAM = {
+    "bot_token": os.environ["TELEGRAM_BOT_TOKEN"],
+}
