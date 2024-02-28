@@ -14,7 +14,7 @@ class Book(models.Model):
     cover = models.CharField(max_length=1, choices=COVER_CHOICES, blank=True)
 
     def __str__(self):
-        return f"{self.title} ({self.author})"
+        return f"{self.title} (by {self.author})"
 
     class Meta:
         ordering = ["author", "title"]
