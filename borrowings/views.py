@@ -1,5 +1,15 @@
+import json
+import uuid
 from datetime import date
+from django.utils import timezone
 
+import telebot
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.sessions.backends.db import SessionStore
+from django.contrib.sessions.models import Session
+from django.core.cache import cache
+from django.core.management import call_command
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -16,6 +26,8 @@ from .serializers import (
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
 from library.models import Book
+
+from user.management.commands.start_bot import telegram_bot
 
 from .telegram import send_notification
 
@@ -44,6 +56,10 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 
         return [IsAuthenticated()]
 
+    @staticmethod
+    def generate_session_key():
+        return str(uuid.uuid4())
+
     def create(self, request, *args, **kwargs):
         book_id = request.data.get("book")
         book_instance = Book.objects.get(pk=book_id)
@@ -56,7 +72,12 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             self.perform_create(serializer)
             headers = self.get_success_headers(serializer.data)
 
-            send_notification(serializer.data)
+            session_key = self.generate_session_key()
+            session = SessionStore(session_key=session_key)
+            session['borrowing_data'] = serializer.data
+            print(session['borrowing_data'])
+
+            session.save()
 
             return Response(
                 serializer.data, status=status.HTTP_201_CREATED, headers=headers
