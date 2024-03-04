@@ -67,10 +67,6 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 
         return [IsAuthenticated()]
 
-    @staticmethod
-    def generate_session_key():
-        return str(uuid.uuid4())
-
     def create(self, request, *args, **kwargs):
         book_id = request.data.get("book")
         book_instance = Book.objects.get(pk=book_id)
@@ -82,13 +78,6 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
             headers = self.get_success_headers(serializer.data)
-
-            session_key = self.generate_session_key()
-            session = SessionStore(session_key=session_key)
-            session["borrowing_data"] = serializer.data
-            print(session["borrowing_data"])
-
-            session.save()
 
             return Response(
                 serializer.data, status=status.HTTP_201_CREATED, headers=headers
@@ -216,51 +205,42 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 #     return requests.post(TELEGRAM_API_URL + method, data)
 
 
-def set_webhook():
-    response = requests.get(f'{TELEGRAM_API_URL}/setWebhook?url={NGROK}')
-    if response.status_code == 200:
-        print('Webhook set successfully!')
-    else:
-        print('Failed to set webhook:', response.text)
 
 
-set_webhook()
-
-
-def send_message(chat_id, text):
-    payload = {
-        'chat_id': chat_id,
-        'text': text
-    }
-    # telegram_bot.bot.send_message(chat_id, text)
-
-    return requests.post(
-        f'{TELEGRAM_API_URL}/sendMessage',
-        json=payload
-    )
+# def send_message(chat_id, text):
+#     payload = {
+#         'chat_id': chat_id,
+#         'text': text
+#     }
+#     # telegram_bot.bot.send_message(chat_id, text)
+#
+#     return requests.post(
+#         f'{TELEGRAM_API_URL}/sendMessage',
+#         json=payload
+#     )
 
     # if response.status_code != 200:
     #     print(f"Failed to send message. Status code: {response.status_code}")
 
-
-
-
-@csrf_exempt
-def telegram_webhook(request):
-    if request.method == 'POST':
-        update = json.loads(request.body.decode('utf-8'))
-        print("upd_obj", update)
-        process_update(update)
-        return JsonResponse({'status': 'ok'})
-    elif request.method == 'GET':
-        return JsonResponse({'status': 'ok'})
-    else:
-        return JsonResponse({'status': 'error', 'message': 'Method Not Allowed'}, status=405)
-
-
-def process_update(update):
-    chat_id = update['message']['chat']['id']
-    text = update['message']['text']
-    print('textaa', text)
-
-    send_message(chat_id, 'Welcome! Please enter your email address:')
+#
+#
+#
+# @csrf_exempt
+# def telegram_webhook(request):
+#     if request.method == 'POST':
+#         update = json.loads(request.body.decode('utf-8'))
+#         print("upd_obj", update)
+#         process_update(update)
+#         return JsonResponse({'status': 'ok'})
+#     elif request.method == 'GET':
+#         return JsonResponse({'status': 'ok'})
+#     else:
+#         return JsonResponse({'status': 'error', 'message': 'Method Not Allowed'}, status=405)
+#
+#
+# def process_update(update):
+#     chat_id = update['message']['chat']['id']
+#     text = update['message']['text']
+#     print('textaa', text)
+#
+#     send_message(chat_id, 'Welcome! Please enter your email address:')
