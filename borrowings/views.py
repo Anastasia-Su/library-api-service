@@ -1,20 +1,4 @@
-import json
-
-import requests
-import uuid
 from datetime import date
-
-from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
-from django.utils import timezone
-
-import telebot
-from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.contrib.sessions.backends.db import SessionStore
-from django.contrib.sessions.models import Session
-from django.core.cache import cache
-from django.core.management import call_command
-from django.views.decorators.csrf import csrf_exempt
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -31,16 +15,6 @@ from .serializers import (
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
 from library.models import Book
-
-from user.management.commands.start_bot import telegram_bot
-
-import logging
-
-logger = logging.getLogger(__name__)
-
-bot_token = settings.TELEGRAM["bot_token"]
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{bot_token}/"
-NGROK = "https://9673-178-150-12-234.ngrok-free.app/"
 
 
 class BorrowingViewSet(viewsets.ModelViewSet):
@@ -143,104 +117,3 @@ class BorrowingViewSet(viewsets.ModelViewSet):
                 return Borrowing.objects.none()
 
         return queryset
-
-
-# telegram_bot = telebot.TeleBot(settings.TELEGRAM["bot_token"])
-
-#
-# @csrf_exempt
-# def telegram_bot(request):
-#   if request.method == 'POST':
-#     message = json.loads(request.body.decode('utf-8'))
-#     chat_id = message['message']['chat']['id']
-#     text = message['message']['text']
-#     send_message("sendMessage", {
-#       'chat_id': f'your message {text}'
-#     })
-#   return HttpResponse('ok')
-#
-#
-# def send_message(method, data):
-#     return requests.post(TELEGRAM_API_URL + method, data)
-#
-#
-# @csrf_exempt
-# def telegram_webhook(request):
-#     # if request.method == 'POST':
-#     #     try:
-#     #         update = telebot.types.Update.de_json(request.body)
-#     #         telegram_bot.bot.process_new_updates([update])
-#     #         logger.info("Update processed successfully")
-#     #     except Exception as e:
-#     #         logger.error("Error processing update: %s", str(e))
-#     #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-#
-#     response = requests.post(TELEGRAM_API_URL + "setWebhook?url=" + NGROK).json()
-#
-#     return HttpResponse(f"{response}")
-
-
-# def setwebhook(request):
-#     response = requests.post(TELEGRAM_API_URL + "setWebhook?url=" + NGROK).json()
-#     return HttpResponse(f"{response}")
-#
-#
-# @csrf_exempt
-# def telegram_bot(request):
-#     if request.method == "POST":
-#         update = json.loads(request.body.decode("utf-8"))
-#         handle_update(update)
-#         return HttpResponse("ok")
-#     else:
-#         return HttpResponseBadRequest("Bad Request")
-#
-#
-# def handle_update(update):
-#     chat_id = update["message"]["chat"]["id"]
-#     text = update["message"]["text"]
-#     send_message("sendMessage", {"chat_id": chat_id, "text": f"you said {text}"})
-#
-#
-# def send_message(method, data):
-#     return requests.post(TELEGRAM_API_URL + method, data)
-
-
-
-
-# def send_message(chat_id, text):
-#     payload = {
-#         'chat_id': chat_id,
-#         'text': text
-#     }
-#     # telegram_bot.bot.send_message(chat_id, text)
-#
-#     return requests.post(
-#         f'{TELEGRAM_API_URL}/sendMessage',
-#         json=payload
-#     )
-
-    # if response.status_code != 200:
-    #     print(f"Failed to send message. Status code: {response.status_code}")
-
-#
-#
-#
-# @csrf_exempt
-# def telegram_webhook(request):
-#     if request.method == 'POST':
-#         update = json.loads(request.body.decode('utf-8'))
-#         print("upd_obj", update)
-#         process_update(update)
-#         return JsonResponse({'status': 'ok'})
-#     elif request.method == 'GET':
-#         return JsonResponse({'status': 'ok'})
-#     else:
-#         return JsonResponse({'status': 'error', 'message': 'Method Not Allowed'}, status=405)
-#
-#
-# def process_update(update):
-#     chat_id = update['message']['chat']['id']
-#     text = update['message']['text']
-#     print('textaa', text)
-#
-#     send_message(chat_id, 'Welcome! Please enter your email address:')
