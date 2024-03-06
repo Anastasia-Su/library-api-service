@@ -19,3 +19,20 @@ class Borrowing(models.Model):
 
     class Meta:
         ordering = ["expected_return_date", "book"]
+
+
+class Payment(models.Model):
+    card_number = models.IntegerField()
+    expiry_month = models.IntegerField()
+    expiry_year = models.IntegerField()
+    cvc = models.IntegerField()
+    borrowing = models.ForeignKey(
+        Borrowing,
+        on_delete=models.CASCADE,
+        related_name="payments"
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
+
+    def __str__(self):
+        return f"{self.card_number}\n{self.expiry_year}/{self.expiry_month}"
+
