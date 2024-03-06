@@ -31,11 +31,12 @@ SECRET_KEY = os.environ["SECRET_KEY"]
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
 
+ALLOWED_HOSTS = ["127.0.0.1", "9673-178-150-12-234.ngrok-free.app"]
 
 # Application definition
 
@@ -177,3 +178,16 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
     "ROTATE_REFRESH_TOKENS": True,
 }
+
+TELEGRAM = {
+    "bot_token": os.environ["TELEGRAM_BOT_TOKEN"],
+}
+
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+EMAIL_HOST = os.environ["EMAIL_HOST"]
+EMAIL_PORT = os.environ["EMAIL_PORT"]
+EMAIL_USE_TLS = os.environ["EMAIL_USE_TLS"]
+EMAIL_HOST_USER = os.environ["EMAIL_HOST_USER"]
+EMAIL_HOST_PASSWORD = os.environ["EMAIL_HOST_PASSWORD"]

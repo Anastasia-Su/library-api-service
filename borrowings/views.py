@@ -1,9 +1,6 @@
-from datetime import datetime, date
-
-from django.db import Error
+from datetime import date
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
@@ -55,6 +52,7 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
             headers = self.get_success_headers(serializer.data)
+
             return Response(
                 serializer.data, status=status.HTTP_201_CREATED, headers=headers
             )
