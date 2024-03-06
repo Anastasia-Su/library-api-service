@@ -2,6 +2,9 @@ from datetime import date
 
 import stripe
 from django.conf import settings
+from django.http import HttpResponseRedirect
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -15,6 +18,8 @@ from .serializers import (
     ReturnActionSerializer,
     BorrowingReadonlySerializer,
     PaymentSerializer,
+    PaymentListSerializer,
+    PaymentDetailSerializer,
 )
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
@@ -25,6 +30,7 @@ class BorrowingViewSet(viewsets.ModelViewSet):
     queryset = Borrowing.objects.all()
     serializer_class = BorrowingSerializer
     permission_classes = [IsAuthenticated]
+    # lookup_field = ''
 
     def get_serializer_class(self):
         if not self.request.user.is_authenticated:
@@ -55,16 +61,19 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
-            headers = self.get_success_headers(serializer.data)
 
-            return Response(
-                serializer.data, status=status.HTTP_201_CREATED, headers=headers
-            )
+            payment_url = self.generate_payment_url()
+            return redirect(payment_url)
 
         return Response(
             {"error": "This book is not currently available"},
             status=status.HTTP_406_NOT_ACCEPTABLE,
         )
+
+    @staticmethod
+    def generate_payment_url():
+        payment_url = "/api/borrowings/payments/"
+        return payment_url
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -128,12 +137,38 @@ class PaymentViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_serializer_class(self):
+        if self.action == "list":
+            return PaymentListSerializer
+        if self.action == "retrieve":
+            return PaymentDetailSerializer
+        return PaymentSerializer
+
+    def get_permissions(self):
+        if self.action in ["update", "partial_update"]:
+            return [IsCurrentlyLoggedIn()]
+        if self.action == "destroy":
+            return [IsAdminUser()]
+
+        return [IsAuthenticated()]
+
     def create(self, request, *args, **kwargs):
         response = self.stripe_card_payment(request.data)
         if response.get("status") == 200:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
+
+            borrowing_id = serializer.data.get("borrowing")
+            if borrowing_id:
+                borrowing = Borrowing.objects.get(id=borrowing_id)
+                borrowing.paid = True
+                borrowing.save()
+            else:
+                return Response(
+                    {"error": "Failed to save payment"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         return Response(response)
 

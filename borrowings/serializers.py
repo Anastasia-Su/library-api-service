@@ -46,7 +46,7 @@ class BorrowingListSerializer(BorrowingSerializer):
 
     class Meta:
         model = Borrowing
-        fields = ["id", "user", "book", "borrowed", "returned"]
+        fields = ["id", "user", "book", "borrowed", "paid", "returned"]
 
 
 class BorrowingDetailSerializer(BorrowingSerializer):
@@ -64,6 +64,7 @@ class BorrowingDetailSerializer(BorrowingSerializer):
             "book",
             "borrow_date",
             "expected_return_date",
+            "paid",
             "returned",
         ]
 
@@ -83,7 +84,8 @@ class PaymentSerializer(serializers.ModelSerializer):
 
         if request.user:
             self.fields["borrowing"].queryset = Borrowing.objects.filter(
-                user=request.user
+                user=request.user,
+                paid=False
             )
 
     #
@@ -110,6 +112,37 @@ class PaymentSerializer(serializers.ModelSerializer):
             "card_number",
             "expiry_month",
             "expiry_year",
+            "cvc",
+            "borrowing",
+        ]
+
+
+class PaymentListSerializer(PaymentSerializer):
+    expiry = serializers.SerializerMethodField(read_only=True)
+
+    def get_expiry(self, obj):
+        return f"{obj.expiry_year}/{obj.expiry_month}"
+
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "card_number",
+            "expiry",
+            "cvc",
+            "borrowing",
+        ]
+
+
+class PaymentDetailSerializer(PaymentListSerializer):
+    borrowing = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "card_number",
+            "expiry",
             "cvc",
             "borrowing",
         ]

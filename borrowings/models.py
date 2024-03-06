@@ -7,6 +7,7 @@ class Borrowing(models.Model):
     borrow_date = models.DateField()
     expected_return_date = models.DateField()
     returned = models.DateField(null=True, blank=True)
+    paid = models.BooleanField(default=False)
     book = models.ForeignKey(
         Book,
         on_delete=models.CASCADE,
@@ -15,7 +16,10 @@ class Borrowing(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"{self.book}: borrowed on {self.borrow_date}"
+        return (
+            f"{self.book}:\nfrom {self.borrow_date}"
+            f" to {self.expected_return_date}"
+        )
 
     class Meta:
         ordering = ["expected_return_date", "book"]
