@@ -20,21 +20,6 @@ class Borrowing(models.Model):
             f"{self.book}:\nfrom {self.borrow_date}"
             f" to {self.expected_return_date}"
         )
-    #
-    # def save(self, *args, **kwargs):
-    #     super().save(*args, **kwargs)
-    #     with transaction.atomic():
-    #         borrowing_data = {
-    #             "borrow_date": self.borrow_date,
-    #             "expected_return_date": self.expected_return_date,
-    #             "book_id": self.book_id,
-    #             "user_id": self.user_id,
-    #             "paid": self.paid,
-    #         }
-    #         create_after_payment.apply_async(
-    #             args=[borrowing_data],
-    #             countdown=30
-    #         )
 
     class Meta:
         ordering = ["expected_return_date", "book"]

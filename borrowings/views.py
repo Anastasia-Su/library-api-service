@@ -7,6 +7,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
+from stripe import CardError
 
 from .models import Borrowing, Payment
 from .serializers import (
@@ -60,19 +61,19 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         if book_instance.inventory > 0:
             book_instance.inventory -= 1
             book_instance.save()
-
-            task_result = delay_borrowing_create.apply_async(
-                args=[
-                    request.user.id, book_id, serializer.data
-                ],
-                countdown=60
-            )
-
-            if not task_result:
-                return Response(
-                    {"error": "Failed to schedule task"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+            #
+            # task_result = delay_borrowing_create.apply_async(
+            #     args=[
+            #         request.user.id, book_id, serializer.data
+            #     ],
+            #     countdown=60
+            # )
+            #
+            # if not task_result:
+            #     return Response(
+            #         {"error": "Failed to schedule task"},
+            #         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            #     )
 
             payment_url = self.generate_payment_url()
             return redirect(payment_url)
@@ -87,11 +88,11 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         payment_url = "/api/borrowings/payments/"
         return payment_url
 
-    # def perform_create(self, serializer):
-    #     serializer.save(user=self.request.user)
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
-    # def perform_update(self, serializer):
-    #     serializer.save(user=self.request.user)
+    def perform_update(self, serializer):
+        serializer.save(user=self.request.user)
 
     @action(
         methods=["POST"],
@@ -128,6 +129,9 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         user = self.request.query_params.get("user")
         is_active = self.request.query_params.get("is_active")
         queryset = self.queryset
+
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(user=self.request.user, paid=True)
 
         if user:
             user_id = int(user)
@@ -190,6 +194,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         try:
             amount = self.calculate_amount(request_data)
             currency = "usd"
+
             payment_intent = self.create_payment_intent(amount, currency)
             success, message = self.handle_payment_response(payment_intent)
             if success:
@@ -207,7 +212,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
             amount=amount,
             currency=currency,
             payment_method_types=["card"],
-            payment_method="pm_card_visa",
+            payment_method=settings.STRIPE_PAYMENT_METHOD,
             confirm=True,
         )
 
@@ -239,3 +244,17 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(user=self.request.user)
+
+    def get_queryset(self):
+        user = self.request.query_params.get("user")
+        queryset = self.queryset
+
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(user=self.request.user)
+
+        if user:
+            user_id = int(user)
+            queryset = queryset.filter(user__id=user_id)
+
+        return queryset
+

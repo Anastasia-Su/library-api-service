@@ -84,15 +84,15 @@ class ReturnActionSerializer(BorrowingSerializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
-    #     request = kwargs["context"]["request"]
-    #
-    #     if request.user:
-    #         self.fields["borrowing"].queryset = Borrowing.objects.filter(
-    #             user=request.user,
-    #             paid=False
-    #         )
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = kwargs["context"]["request"]
+
+        if request.user:
+            self.fields["borrowing"].queryset = Borrowing.objects.filter(
+                user=request.user,
+                paid=False
+            )
 
     #
     # @staticmethod
@@ -119,12 +119,16 @@ class PaymentSerializer(serializers.ModelSerializer):
             "expiry_month",
             "expiry_year",
             "cvc",
-            # "borrowing",
+            "borrowing",
         ]
 
 
 class PaymentListSerializer(PaymentSerializer):
     expiry = serializers.SerializerMethodField(read_only=True)
+    user = serializers.SerializerMethodField(read_only=True)
+
+    def get_user(self, obj):
+        return f"{obj.user.profile.full_name} ({obj.user.email})"
 
     def get_expiry(self, obj):
         return f"{obj.expiry_year}/{obj.expiry_month}"
@@ -137,6 +141,7 @@ class PaymentListSerializer(PaymentSerializer):
             "expiry",
             "cvc",
             "borrowing",
+            "user"
         ]
 
 
@@ -151,4 +156,5 @@ class PaymentDetailSerializer(PaymentListSerializer):
             "expiry",
             "cvc",
             "borrowing",
+            "user"
         ]
