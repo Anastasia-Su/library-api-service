@@ -2,9 +2,7 @@ from datetime import date
 
 import stripe
 from django.conf import settings
-from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
-from django.urls import reverse, reverse_lazy
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -20,17 +18,18 @@ from .serializers import (
     PaymentSerializer,
     PaymentListSerializer,
     PaymentDetailSerializer,
+
 )
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
 from library.models import Book
+from .tasks import delay_borrowing_create
 
 
 class BorrowingViewSet(viewsets.ModelViewSet):
     queryset = Borrowing.objects.all()
     serializer_class = BorrowingSerializer
     permission_classes = [IsAuthenticated]
-    # lookup_field = ''
 
     def get_serializer_class(self):
         if not self.request.user.is_authenticated:
@@ -55,12 +54,25 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         book_id = request.data.get("book")
         book_instance = Book.objects.get(pk=book_id)
 
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         if book_instance.inventory > 0:
             book_instance.inventory -= 1
             book_instance.save()
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
+
+            task_result = delay_borrowing_create.apply_async(
+                args=[
+                    request.user.id, book_id, serializer.data
+                ],
+                countdown=60
+            )
+
+            if not task_result:
+                return Response(
+                    {"error": "Failed to schedule task"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
 
             payment_url = self.generate_payment_url()
             return redirect(payment_url)
@@ -75,11 +87,11 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         payment_url = "/api/borrowings/payments/"
         return payment_url
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    # def perform_create(self, serializer):
+    #     serializer.save(user=self.request.user)
 
-    def perform_update(self, serializer):
-        serializer.save(user=self.request.user)
+    # def perform_update(self, serializer):
+    #     serializer.save(user=self.request.user)
 
     @action(
         methods=["POST"],
@@ -154,6 +166,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         response = self.stripe_card_payment(request.data)
+
         if response.get("status") == 200:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -161,7 +174,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
             borrowing_id = serializer.data.get("borrowing")
             if borrowing_id:
-                borrowing = Borrowing.objects.get(id=borrowing_id)
+                borrowing = Borrowing.objects.get(pk=borrowing_id)
+
                 borrowing.paid = True
                 borrowing.save()
             else:

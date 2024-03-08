@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 
 from rest_framework import serializers
 
@@ -6,6 +6,7 @@ from .models import Borrowing, Payment
 
 
 class BorrowingSerializer(serializers.ModelSerializer):
+
     @staticmethod
     def validate_borrow_date(value):
         if value < date.today():
@@ -24,7 +25,12 @@ class BorrowingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Borrowing
-        fields = ["id", "book", "borrow_date", "expected_return_date"]
+        fields = [
+            "id",
+            "book",
+            "borrow_date",
+            "expected_return_date"
+        ]
 
 
 class BorrowingReadonlySerializer(BorrowingSerializer):
@@ -78,15 +84,15 @@ class ReturnActionSerializer(BorrowingSerializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        request = kwargs["context"]["request"]
-
-        if request.user:
-            self.fields["borrowing"].queryset = Borrowing.objects.filter(
-                user=request.user,
-                paid=False
-            )
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     request = kwargs["context"]["request"]
+    #
+    #     if request.user:
+    #         self.fields["borrowing"].queryset = Borrowing.objects.filter(
+    #             user=request.user,
+    #             paid=False
+    #         )
 
     #
     # @staticmethod
@@ -113,7 +119,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "expiry_month",
             "expiry_year",
             "cvc",
-            "borrowing",
+            # "borrowing",
         ]
 
 
