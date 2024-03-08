@@ -8,21 +8,16 @@ class Borrowing(models.Model):
     expected_return_date = models.DateField()
     returned = models.DateField(null=True, blank=True)
     paid = models.BooleanField(default=False)
-    book = models.ForeignKey(
-        Book,
-        on_delete=models.CASCADE,
-        related_name="borrowings"
-    )
+    book = models.ForeignKey(Book, on_delete=models.PROTECT, related_name="borrowings")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
     def __str__(self):
         return (
-            f"{self.book}:\nfrom {self.borrow_date}"
-            f" to {self.expected_return_date}"
+            f"{self.book}:\nfrom {self.borrow_date}" f" to {self.expected_return_date}"
         )
 
     class Meta:
-        ordering = ["expected_return_date", "book"]
+        ordering = ["id", "expected_return_date", "book"]
 
 
 class Payment(models.Model):
@@ -30,13 +25,18 @@ class Payment(models.Model):
     expiry_month = models.IntegerField()
     expiry_year = models.IntegerField()
     cvc = models.IntegerField()
-    borrowing = models.ForeignKey(
-        Borrowing,
-        on_delete=models.CASCADE,
-        related_name="payments"
+    amount_paid = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
     )
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
+    stripe_payment_id = models.CharField(max_length=255, null=True)
+    borrowing = models.ForeignKey(
+        Borrowing, on_delete=models.PROTECT, related_name="payments"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True
+    )
 
     def __str__(self):
         return f"{self.card_number}\n{self.expiry_year}/{self.expiry_month}"
-

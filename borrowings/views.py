@@ -7,7 +7,6 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
-from stripe import CardError
 
 from .models import Borrowing, Payment
 from .serializers import (
@@ -19,12 +18,13 @@ from .serializers import (
     PaymentSerializer,
     PaymentListSerializer,
     PaymentDetailSerializer,
-
+    PaymentCreateSerializer,
 )
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
 from library.models import Book
 from .tasks import delay_borrowing_create
+from .utils import calculate_amount, stripe_card_payment
 
 
 class BorrowingViewSet(viewsets.ModelViewSet):
@@ -57,6 +57,7 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
 
         if book_instance.inventory > 0:
             book_instance.inventory -= 1
@@ -158,20 +159,27 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return PaymentListSerializer
         if self.action == "retrieve":
             return PaymentDetailSerializer
+        if self.action in ["create", "update", "partial_update"]:
+            return PaymentCreateSerializer
+
         return PaymentSerializer
 
     def get_permissions(self):
         if self.action in ["update", "partial_update"]:
-            return [IsCurrentlyLoggedIn()]
+            return [IsAuthenticatedReadOnly()]
         if self.action == "destroy":
             return [IsAdminUser()]
 
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
-        response = self.stripe_card_payment(request.data)
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        borrowing_id = request.data.get("borrowing")
+
+        response = stripe_card_payment(borrowing_id)
 
         if response.get("status") == 200:
+
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
@@ -189,55 +197,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 )
 
         return Response(response)
-
-    def stripe_card_payment(self, request_data):
-        try:
-            amount = self.calculate_amount(request_data)
-            currency = "usd"
-
-            payment_intent = self.create_payment_intent(amount, currency)
-            success, message = self.handle_payment_response(payment_intent)
-            if success:
-                return {"message": message, "status": status.HTTP_200_OK}
-            else:
-                return {"error": message, "status": status.HTTP_400_BAD_REQUEST}
-        except Exception as e:
-            return {"error": str(e), "status": status.HTTP_400_BAD_REQUEST}
-
-    @staticmethod
-    def create_payment_intent(amount, currency):
-        stripe.api_key = settings.STRIPE_SECRET_KEY
-
-        payment_intent = stripe.PaymentIntent.create(
-            amount=amount,
-            currency=currency,
-            payment_method_types=["card"],
-            payment_method=settings.STRIPE_PAYMENT_METHOD,
-            confirm=True,
-        )
-
-        return payment_intent
-
-    @staticmethod
-    def handle_payment_response(payment_intent):
-        if payment_intent.status == "succeeded":
-            return True, "Payment succeeded"
-        else:
-            error_message = (
-                payment_intent.last_payment_error
-                and payment_intent.last_payment_error.message
-            )
-            return False, f"Payment failed: {error_message}"
-
-    @staticmethod
-    def calculate_amount(request_data):
-        borrowing_id = request_data.get("borrowing")
-        borrowing = Borrowing.objects.get(pk=borrowing_id)
-        duration = borrowing.expected_return_date - borrowing.borrow_date
-        amount_dollars = borrowing.book.daily_fee * duration.days
-        amount_cents = int(amount_dollars * 100)
-
-        return amount_cents
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -257,4 +216,3 @@ class PaymentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(user__id=user_id)
 
         return queryset
-

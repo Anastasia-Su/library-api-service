@@ -1,12 +1,10 @@
-from datetime import date
-
+from datetime import date, datetime
 from rest_framework import serializers
-
 from .models import Borrowing, Payment
+from .utils import calculate_amount, stripe_card_payment
 
 
 class BorrowingSerializer(serializers.ModelSerializer):
-
     @staticmethod
     def validate_borrow_date(value):
         if value < date.today():
@@ -15,22 +13,23 @@ class BorrowingSerializer(serializers.ModelSerializer):
             )
         return value
 
-    @staticmethod
-    def validate_expected_return_date(value):
+    def validate_expected_return_date(self, value):
+        borrow_date_str = self.initial_data.get("borrow_date")
+        borrow_date = datetime.strptime(borrow_date_str, "%Y-%m-%d").date()
+
         if value < date.today():
             raise serializers.ValidationError(
-                "Expected return date cannot be earlier than today."
+                "Expected return date cannot be earlier than today"
+            )
+        if value < borrow_date:
+            raise serializers.ValidationError(
+                "Expected return date cannot be earlier than borrow date"
             )
         return value
 
     class Meta:
         model = Borrowing
-        fields = [
-            "id",
-            "book",
-            "borrow_date",
-            "expected_return_date"
-        ]
+        fields = ["id", "book", "borrow_date", "expected_return_date"]
 
 
 class BorrowingReadonlySerializer(BorrowingSerializer):
@@ -84,32 +83,29 @@ class ReturnActionSerializer(BorrowingSerializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    amount_paid = serializers.DecimalField(max_digits=4, decimal_places=2)
+    stripe_payment_id = serializers.CharField(max_length=255)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = kwargs["context"]["request"]
 
         if request.user:
             self.fields["borrowing"].queryset = Borrowing.objects.filter(
-                user=request.user,
-                paid=False
+                user=request.user, paid=False
             )
 
-    #
-    # @staticmethod
-    # def validate_expiry_month(value):
-    #     if not 1 <= int(value) <= 12:
-    #         raise serializers.ValidationError("Invalid expiry month.")
-    #
-    # @staticmethod
-    # def validate_expiry_year(value):
-    #     today = datetime.now()
-    #     if not int(value) >= today.year:
-    #         raise serializers.ValidationError("Invalid expiry year.")
-    #
-    # @staticmethod
-    # def validate_cvc(value):
-    #     if len(str(value)) not in [3, 4]:
-    #         raise serializers.ValidationError("Invalid cvc number.")
+    def create(self, validated_data):
+        borrowing_id = validated_data.get("borrowing").id
+        print("borrowing_id", borrowing_id)
+        amount_paid = calculate_amount(borrowing_id)
+        response = stripe_card_payment(borrowing_id)
+
+        validated_data["amount_paid"] = amount_paid
+        print("validated_data", validated_data)
+        validated_data["stripe_payment_id"] = response["stripe_payment_id"]
+
+        return super().create(validated_data)
 
     class Meta:
         model = Payment
@@ -120,29 +116,22 @@ class PaymentSerializer(serializers.ModelSerializer):
             "expiry_year",
             "cvc",
             "borrowing",
+            "amount_paid",
+            "stripe_payment_id",
         ]
 
 
 class PaymentListSerializer(PaymentSerializer):
-    expiry = serializers.SerializerMethodField(read_only=True)
     user = serializers.SerializerMethodField(read_only=True)
+    amount_paid = serializers.DecimalField(max_digits=6, decimal_places=2)
+    stripe_payment_id = serializers.CharField(max_length=255)
 
     def get_user(self, obj):
         return f"{obj.user.profile.full_name} ({obj.user.email})"
 
-    def get_expiry(self, obj):
-        return f"{obj.expiry_year}/{obj.expiry_month}"
-
     class Meta:
         model = Payment
-        fields = [
-            "id",
-            "card_number",
-            "expiry",
-            "cvc",
-            "borrowing",
-            "user"
-        ]
+        fields = ["id", "borrowing", "user", "amount_paid", "stripe_payment_id"]
 
 
 class PaymentDetailSerializer(PaymentListSerializer):
@@ -150,11 +139,17 @@ class PaymentDetailSerializer(PaymentListSerializer):
 
     class Meta:
         model = Payment
+        fields = ["id", "borrowing", "user", "amount_paid"]
+
+
+class PaymentCreateSerializer(PaymentSerializer):
+    class Meta:
+        model = Payment
         fields = [
             "id",
             "card_number",
-            "expiry",
+            "expiry_month",
+            "expiry_year",
             "cvc",
             "borrowing",
-            "user"
         ]
