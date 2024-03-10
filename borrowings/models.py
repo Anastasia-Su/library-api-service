@@ -7,7 +7,9 @@ class Borrowing(models.Model):
     borrow_date = models.DateField()
     expected_return_date = models.DateField()
     returned = models.DateField(null=True, blank=True)
+    cancelled = models.BooleanField(default=False)
     paid = models.BooleanField(default=False)
+    stripe_payment_id = models.CharField(max_length=255, null=True)
     book = models.ForeignKey(Book, on_delete=models.PROTECT, related_name="borrowings")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
@@ -31,6 +33,7 @@ class Payment(models.Model):
         null=True,
     )
     stripe_payment_id = models.CharField(max_length=255, null=True)
+    refunded = models.BooleanField(default=False)
     borrowing = models.ForeignKey(
         Borrowing, on_delete=models.PROTECT, related_name="payments"
     )

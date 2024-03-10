@@ -2,7 +2,8 @@ from datetime import date
 
 import stripe
 from django.conf import settings
-from django.shortcuts import redirect
+from django.db import transaction
+from django.shortcuts import redirect, get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -19,12 +20,13 @@ from .serializers import (
     PaymentListSerializer,
     PaymentDetailSerializer,
     PaymentCreateSerializer,
+    RefundActionSerializer,
 )
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
 from library.models import Book
 from .tasks import delay_borrowing_create
-from .utils import calculate_amount, stripe_card_payment
+from .utils import stripe_card_payment
 
 
 class BorrowingViewSet(viewsets.ModelViewSet):
@@ -44,9 +46,9 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         return BorrowingSerializer
 
     def get_permissions(self):
-        if self.action in ["update", "partial_update", "return_borrowing"]:
+        if self.action == "return_borrowing":
             return [IsCurrentlyLoggedIn()]
-        if self.action == "destroy":
+        if self.action in ["update", "partial_update", "destroy"]:
             return [IsAdminUser()]
 
         return [IsAuthenticated()]
@@ -132,7 +134,9 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         queryset = self.queryset
 
         if not self.request.user.is_superuser:
-            queryset = queryset.filter(user=self.request.user, paid=True)
+            queryset = queryset.filter(
+                user=self.request.user, paid=True, cancelled=False
+            )
 
         if user:
             user_id = int(user)
@@ -161,6 +165,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return PaymentDetailSerializer
         if self.action in ["create", "update", "partial_update"]:
             return PaymentCreateSerializer
+        if self.action == "refund_payment":
+            return RefundActionSerializer
 
         return PaymentSerializer
 
@@ -169,6 +175,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return [IsAuthenticatedReadOnly()]
         if self.action == "destroy":
             return [IsAdminUser()]
+        if self.action == "refund_payment":
+            return [IsCurrentlyLoggedIn()]
 
         return [IsAuthenticated()]
 
@@ -176,33 +184,78 @@ class PaymentViewSet(viewsets.ModelViewSet):
         stripe.api_key = settings.STRIPE_SECRET_KEY
         borrowing_id = request.data.get("borrowing")
 
-        response = stripe_card_payment(borrowing_id)
+        if borrowing_id:
+            response = stripe_card_payment(borrowing_id)
 
-        if response.get("status") == 200:
+            if response.get("status") == 200:
+                serializer = self.get_serializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                self.perform_create(serializer)
 
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
+                if borrowing_id:
+                    borrowing = Borrowing.objects.get(pk=borrowing_id)
 
-            borrowing_id = serializer.data.get("borrowing")
-            if borrowing_id:
-                borrowing = Borrowing.objects.get(pk=borrowing_id)
-
-                borrowing.paid = True
-                borrowing.save()
-            else:
-                return Response(
-                    {"error": "Failed to save payment"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        return Response(response)
+                    borrowing.paid = True
+                    borrowing.stripe_payment_id = response["stripe_payment_id"]
+                    borrowing.save()
+                else:
+                    return Response(
+                        {"error": "Failed to save payment"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            return Response(response)
+        return Response(
+            {"error": "No borrowing found"}, status=status.HTTP_404_NOT_FOUND
+        )
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(
+        methods=["POST"],
+        detail=True,
+        url_path="refund-payment",
+    )
+    def refund_payment(self, request, pk):
+        """Endpoint for refunding costs for a borrowing"""
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        if request.method == "POST":
+            payment = get_object_or_404(Payment, pk=pk)
+            borrowing = get_object_or_404(Borrowing, pk=payment.borrowing.id)
+            payment_intent_id = payment.stripe_payment_id
+
+            if borrowing.borrow_date != date.today():
+                return Response(
+                    {"denied": "You can only refund borrowings created today"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            try:
+                if payment_intent_id:
+                    refund = stripe.Refund.create(payment_intent=payment_intent_id)
+                    if refund:
+                        payment.refunded = True
+                        borrowing.cancelled = True
+                        borrowing.save()
+                        payment.save()
+
+                        return Response(
+                            {"message": "Refund created"}, status=status.HTTP_200_OK
+                        )
+
+            except stripe.error.StripeError as e:
+                print("Stripe error:", str(e))
+                return Response(
+                    {"error": "Failed to create refund: " + str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        return Response(
+            {"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST
+        )
 
     def get_queryset(self):
         user = self.request.query_params.get("user")

@@ -51,7 +51,16 @@ class BorrowingListSerializer(BorrowingSerializer):
 
     class Meta:
         model = Borrowing
-        fields = ["id", "user", "book", "borrowed", "paid", "returned"]
+        fields = [
+            "id",
+            "user",
+            "book",
+            "borrowed",
+            "paid",
+            "stripe_payment_id",
+            "returned",
+            "cancelled",
+        ]
 
 
 class BorrowingDetailSerializer(BorrowingSerializer):
@@ -70,7 +79,9 @@ class BorrowingDetailSerializer(BorrowingSerializer):
             "borrow_date",
             "expected_return_date",
             "paid",
+            "stripe_payment_id",
             "returned",
+            "cancelled",
         ]
 
 
@@ -83,26 +94,25 @@ class ReturnActionSerializer(BorrowingSerializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    amount_paid = serializers.DecimalField(max_digits=4, decimal_places=2)
+    amount_paid = serializers.DecimalField(max_digits=6, decimal_places=2)
     stripe_payment_id = serializers.CharField(max_length=255)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        request = kwargs["context"]["request"]
+        request = kwargs.get("context").get("request")
 
-        if request.user:
+        if request.user and "borrowing" in self.fields:
             self.fields["borrowing"].queryset = Borrowing.objects.filter(
                 user=request.user, paid=False
             )
 
     def create(self, validated_data):
         borrowing_id = validated_data.get("borrowing").id
-        print("borrowing_id", borrowing_id)
+
         amount_paid = calculate_amount(borrowing_id)
         response = stripe_card_payment(borrowing_id)
 
         validated_data["amount_paid"] = amount_paid
-        print("validated_data", validated_data)
         validated_data["stripe_payment_id"] = response["stripe_payment_id"]
 
         return super().create(validated_data)
@@ -123,15 +133,21 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 class PaymentListSerializer(PaymentSerializer):
     user = serializers.SerializerMethodField(read_only=True)
-    amount_paid = serializers.DecimalField(max_digits=6, decimal_places=2)
-    stripe_payment_id = serializers.CharField(max_length=255)
 
-    def get_user(self, obj):
+    @staticmethod
+    def get_user(obj):
         return f"{obj.user.profile.full_name} ({obj.user.email})"
 
     class Meta:
         model = Payment
-        fields = ["id", "borrowing", "user", "amount_paid", "stripe_payment_id"]
+        fields = [
+            "id",
+            "borrowing",
+            "user",
+            "amount_paid",
+            "stripe_payment_id",
+            "refunded",
+        ]
 
 
 class PaymentDetailSerializer(PaymentListSerializer):
@@ -139,7 +155,14 @@ class PaymentDetailSerializer(PaymentListSerializer):
 
     class Meta:
         model = Payment
-        fields = ["id", "borrowing", "user", "amount_paid"]
+        fields = [
+            "id",
+            "borrowing",
+            "user",
+            "amount_paid",
+            "stripe_payment_id",
+            "refunded",
+        ]
 
 
 class PaymentCreateSerializer(PaymentSerializer):
@@ -153,3 +176,11 @@ class PaymentCreateSerializer(PaymentSerializer):
             "cvc",
             "borrowing",
         ]
+
+
+class RefundActionSerializer(PaymentSerializer):
+    refund = serializers.ChoiceField(choices=["I want to refund my payment"])
+
+    class Meta:
+        model = Payment
+        fields = ["refund"]
