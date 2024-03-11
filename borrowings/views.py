@@ -186,6 +186,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
         return [IsAuthenticated()]
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         stripe.api_key = settings.STRIPE_SECRET_KEY
         borrowing_id = request.data.get("borrowing")
@@ -197,6 +198,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 serializer = self.get_serializer(data=request.data)
                 serializer.is_valid(raise_exception=True)
                 self.perform_create(serializer)
+
+                serializer.instance.amount_paid = calculate_amount(borrowing_id)
+                serializer.instance.stripe_payment_id = response["stripe_payment_id"]
+                serializer.instance.save()
 
                 borrowing = Borrowing.objects.get(pk=borrowing_id)
 
@@ -264,12 +269,12 @@ class PaymentViewSet(viewsets.ModelViewSet):
         user = self.request.query_params.get("user")
         queryset = self.queryset
 
-        if not self.request.user.is_superuser:
-            queryset = queryset.filter(user=self.request.user)
-
         if user:
             user_id = int(user)
             queryset = queryset.filter(user__id=user_id)
+
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(user=self.request.user)
 
         return queryset
 
@@ -300,8 +305,7 @@ class FinesViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         stripe.api_key = settings.STRIPE_SECRET_KEY
         borrowing_id = request.data.get("borrowing")
-
-        print("reqdata", request.data)
+        borrowing = Borrowing.objects.get(pk=borrowing_id)
 
         if borrowing_id:
             response = stripe_card_payment(borrowing_id, calculate_fines)
@@ -311,10 +315,16 @@ class FinesViewSet(viewsets.ModelViewSet):
                 serializer.is_valid(raise_exception=True)
                 self.perform_create(serializer)
 
-                borrowing = Borrowing.objects.get(pk=borrowing_id)
                 payment = borrowing.payment
+
+                serializer.instance.fines_paid = calculate_fines(borrowing_id)
+                serializer.instance.stripe_payment_id = response["stripe_payment_id"]
+
                 if payment:
-                    # payment = Payment.objects.get(pk=payment_id)
+                    serializer.instance.payment = payment
+                    serializer.instance.save()
+                    print("serpay", serializer.instance.payment)
+
                     payment.fines = serializer.instance
                 else:
                     return Response(

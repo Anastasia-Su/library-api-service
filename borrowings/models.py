@@ -69,7 +69,7 @@ class Fines(models.Model):
     )
     stripe_payment_id = models.CharField(max_length=255, null=True)
     payment = models.ForeignKey(
-        Payment, on_delete=models.PROTECT, related_name="payment_fines"
+        Payment, on_delete=models.PROTECT, related_name="payment_fines", null=True
     )
     borrowing = models.ForeignKey(
         Borrowing, on_delete=models.PROTECT, related_name="payment_fines"
