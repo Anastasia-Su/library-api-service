@@ -1,4 +1,7 @@
+from datetime import date
+
 import stripe
+from decimal import Decimal
 from django.conf import settings
 from rest_framework import status
 
@@ -16,9 +19,21 @@ def calculate_amount(borrowing_id):
     return amount_dollars
 
 
-def stripe_card_payment(borrowing_id):
+def calculate_fines(borrowing_id):
+    fine_multiplier = Decimal(1.5)
+    borrowing = Borrowing.objects.get(pk=borrowing_id)
+    duration = date.today() - borrowing.expected_return_date
+    if duration.days > 0:
+        amount_dollars = borrowing.book.daily_fee * duration.days * fine_multiplier
+    else:
+        amount_dollars = 0
+
+    return amount_dollars
+
+
+def stripe_card_payment(borrowing_id, func):
     try:
-        amount_dollars = calculate_amount(borrowing_id)
+        amount_dollars = func(borrowing_id)
         amount = int(amount_dollars * 100)
         currency = "usd"
 

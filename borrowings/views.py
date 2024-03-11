@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
-from .models import Borrowing, Payment
+from .models import Borrowing, Payment, Fines
 from .serializers import (
     BorrowingSerializer,
     BorrowingListSerializer,
@@ -21,16 +21,20 @@ from .serializers import (
     PaymentDetailSerializer,
     PaymentCreateSerializer,
     RefundActionSerializer,
+    FinesSerializer,
+    FinesListSerializer,
+    FinesDetailSerializer,
+    FinesCreateSerializer,
 )
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
 from library.models import Book
 from .tasks import delay_borrowing_create
-from .utils import stripe_card_payment
+from .utils import stripe_card_payment, calculate_fines, calculate_amount
 
 
 class BorrowingViewSet(viewsets.ModelViewSet):
-    queryset = Borrowing.objects.all()
+    queryset = Borrowing.objects.select_related("user__profile", "book")
     serializer_class = BorrowingSerializer
     permission_classes = [IsAuthenticated]
 
@@ -78,18 +82,12 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             #         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             #     )
 
-            payment_url = self.generate_payment_url()
-            return redirect(payment_url)
+            return redirect("/api/borrowings/payments/")
 
         return Response(
             {"error": "This book is not currently available"},
             status=status.HTTP_406_NOT_ACCEPTABLE,
         )
-
-    @staticmethod
-    def generate_payment_url():
-        payment_url = "/api/borrowings/payments/"
-        return payment_url
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -124,7 +122,15 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             book_instance.inventory += 1
             book_instance.save()
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            if borrowing.expected_return_date < date.today():
+                borrowing.fines_applied = calculate_fines(borrowing.id)
+                borrowing.save()
+
+                return redirect("/api/borrowings/fines/")
+
+            return Response(
+                {"success": "Borrowing returned"}, status=status.HTTP_201_CREATED
+            )
 
         return Response({"error": "Fail"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -154,7 +160,7 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
-    queryset = Payment.objects.all()
+    queryset = Payment.objects.select_related("user", "borrowing")
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated]
 
@@ -185,25 +191,22 @@ class PaymentViewSet(viewsets.ModelViewSet):
         borrowing_id = request.data.get("borrowing")
 
         if borrowing_id:
-            response = stripe_card_payment(borrowing_id)
+            response = stripe_card_payment(borrowing_id, calculate_amount)
 
             if response.get("status") == 200:
                 serializer = self.get_serializer(data=request.data)
                 serializer.is_valid(raise_exception=True)
                 self.perform_create(serializer)
 
-                if borrowing_id:
-                    borrowing = Borrowing.objects.get(pk=borrowing_id)
+                borrowing = Borrowing.objects.get(pk=borrowing_id)
 
-                    borrowing.paid = True
-                    borrowing.stripe_payment_id = response["stripe_payment_id"]
-                    borrowing.save()
-                else:
-                    return Response(
-                        {"error": "Failed to save payment"},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                borrowing.paid = True
+                borrowing.payment = serializer.instance
+                borrowing.stripe_payment_id = response["stripe_payment_id"]
+                borrowing.save()
+
             return Response(response)
+
         return Response(
             {"error": "No borrowing found"}, status=status.HTTP_404_NOT_FOUND
         )
@@ -256,6 +259,85 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return Response(
             {"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST
         )
+
+    def get_queryset(self):
+        user = self.request.query_params.get("user")
+        queryset = self.queryset
+
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(user=self.request.user)
+
+        if user:
+            user_id = int(user)
+            queryset = queryset.filter(user__id=user_id)
+
+        return queryset
+
+
+class FinesViewSet(viewsets.ModelViewSet):
+    queryset = Fines.objects.select_related("user", "borrowing")
+    serializer_class = FinesSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return FinesListSerializer
+        if self.action == "retrieve":
+            return FinesDetailSerializer
+        if self.action in ["create", "update", "partial_update"]:
+            return FinesCreateSerializer
+
+        return FinesSerializer
+
+    def get_permissions(self):
+        if self.action in ["update", "partial_update"]:
+            return [IsAuthenticatedReadOnly()]
+        if self.action == "destroy":
+            return [IsAdminUser()]
+
+        return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        borrowing_id = request.data.get("borrowing")
+
+        print("reqdata", request.data)
+
+        if borrowing_id:
+            response = stripe_card_payment(borrowing_id, calculate_fines)
+
+            if response.get("status") == 200:
+                serializer = self.get_serializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                self.perform_create(serializer)
+
+                borrowing = Borrowing.objects.get(pk=borrowing_id)
+                payment = borrowing.payment
+                if payment:
+                    # payment = Payment.objects.get(pk=payment_id)
+                    payment.fines = serializer.instance
+                else:
+                    return Response(
+                        {"error": "No payment found"}, status=status.HTTP_404_NOT_FOUND
+                    )
+
+                borrowing.fines_paid = True
+                borrowing.stripe_payment_id = response["stripe_payment_id"]
+
+                borrowing.save()
+                payment.save()
+
+            return Response(response)
+
+        return Response(
+            {"error": "No borrowing found"}, status=status.HTTP_404_NOT_FOUND
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(user=self.request.user)
 
     def get_queryset(self):
         user = self.request.query_params.get("user")
