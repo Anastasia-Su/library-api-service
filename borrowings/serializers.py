@@ -1,9 +1,7 @@
 from datetime import date, datetime
 
-from django.db.models import Q
 from rest_framework import serializers
 from .models import Borrowing, Payment, Fines
-from .utils import calculate_amount, stripe_card_payment, calculate_fines
 
 
 class BorrowingSerializer(serializers.ModelSerializer):
@@ -70,7 +68,7 @@ class BorrowingListSerializer(BorrowingSerializer):
         ]
 
 
-class BorrowingDetailSerializer(BorrowingSerializer):
+class BorrowingDetailSerializer(BorrowingListSerializer):
     book = serializers.StringRelatedField(read_only=True)
     user = serializers.SerializerMethodField(read_only=True)
 
@@ -104,8 +102,8 @@ class ReturnActionSerializer(BorrowingSerializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    amount_paid = serializers.DecimalField(max_digits=6, decimal_places=2)
-    stripe_payment_id = serializers.CharField(max_length=255)
+    # amount_paid = serializers.DecimalField(max_digits=6, decimal_places=2)
+    # stripe_payment_id = serializers.CharField(max_length=255)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

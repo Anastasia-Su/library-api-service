@@ -54,6 +54,8 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             return [IsCurrentlyLoggedIn()]
         if self.action in ["update", "partial_update", "destroy"]:
             return [IsAdminUser()]
+        if self.request.user.is_superuser:
+            return [IsAuthenticated()]
 
         return [IsAuthenticated()]
 
@@ -123,8 +125,9 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             book_instance.save()
 
             if borrowing.expected_return_date < date.today():
-                # borrowing.fines_applied = calculate_fines(borrowing.id)
-                # borrowing.save()
+                # IF YOU USE CELERY, PLEASE REMOVE FOLLOWING TWO LINES
+                borrowing.fines_applied = calculate_fines(borrowing.id)
+                borrowing.save()
 
                 return redirect("/api/borrowings/fines/")
 
@@ -138,7 +141,8 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         user = self.request.query_params.get("user")
         is_active = self.request.query_params.get("is_active")
         fines = self.request.query_params.get("fines")
-        queryset = self.queryset
+
+        queryset = self.queryset.all()
 
         if not self.request.user.is_superuser:
             queryset = queryset.filter(
@@ -190,6 +194,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return [IsAdminUser()]
         if self.action == "refund_payment":
             return [IsCurrentlyLoggedIn()]
+        if self.request.user.is_superuser:
+            return [IsAuthenticated()]
 
         return [IsAuthenticated()]
 
@@ -274,7 +280,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.query_params.get("user")
-        queryset = self.queryset
+        queryset = self.queryset.all()
 
         if not self.request.user.is_superuser:
             queryset = queryset.filter(user=self.request.user)
@@ -359,7 +365,7 @@ class FinesViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.query_params.get("user")
-        queryset = self.queryset
+        queryset = self.queryset.all()
 
         if not self.request.user.is_superuser:
             queryset = queryset.filter(user=self.request.user)
