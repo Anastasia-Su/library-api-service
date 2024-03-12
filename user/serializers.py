@@ -54,11 +54,26 @@ class ProfileListSerializer(ProfileSerializer):
         model = Profile
         fields = [
             "id",
+            "user",
             "full_name",
             "bio",
             "image",
         ]
 
 
-class ProfileDetailSerializer(ProfileSerializer):
-    pass
+class ProfileDetailSerializer(ProfileListSerializer):
+    user = serializers.SerializerMethodField(read_only=True)
+
+    @staticmethod
+    def get_user(obj):
+        return f"{obj.first_name} {obj.last_name} ({obj.user.email})"
+
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "user",
+            "full_name",
+            "bio",
+            "image",
+        ]

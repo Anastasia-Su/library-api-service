@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "debug_toolbar",
     "drf_spectacular",
+    "django_celery_beat",
     "library",
     "user",
     "borrowings",
@@ -191,3 +192,15 @@ EMAIL_PORT = os.environ["EMAIL_PORT"]
 EMAIL_USE_TLS = os.environ["EMAIL_USE_TLS"]
 EMAIL_HOST_USER = os.environ["EMAIL_HOST_USER"]
 EMAIL_HOST_PASSWORD = os.environ["EMAIL_HOST_PASSWORD"]
+
+
+STRIPE_SECRET_KEY = os.environ["STRIPE_SECRET_KEY"]
+STRIPE_PUBLISHABLE_KEY = os.environ["STRIPE_PUBLISHABLE_KEY"]
+STRIPE_PAYMENT_METHOD = os.environ["STRIPE_PAYMENT_METHOD"]
+
+
+CELERY_BROKER_URL = os.environ["CELERY_BROKER_URL"]
+CELERY_RESULT_BACKEND = os.environ["CELERY_RESULT_BACKEND"]
+CELERY_TIMEZONE = "Europe/Kiev"
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60

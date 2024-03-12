@@ -11,7 +11,8 @@ class BookSerializer(serializers.ModelSerializer):
 class BookListSerializer(BookSerializer):
     book = serializers.SerializerMethodField(read_only=True)
 
-    def get_book(self, obj):
+    @staticmethod
+    def get_book(obj):
         return f"{obj.title} by {obj.author}"
 
     class Meta:

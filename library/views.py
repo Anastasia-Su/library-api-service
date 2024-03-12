@@ -1,3 +1,5 @@
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
@@ -35,3 +37,24 @@ class BookViewSet(viewsets.ModelViewSet):
             return [IsAdminUser()]
 
         return [IsAuthenticatedReadOnly()]
+
+    def get_queryset(self):
+        title = self.request.query_params.get("title")
+        queryset = self.queryset.all()
+
+        if title:
+            queryset = queryset.filter(title__icontains=title)
+
+        return queryset
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "title",
+                type=OpenApiTypes.STR,
+                description="Filter books by title (ex. ?title=book1)",
+            )
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)

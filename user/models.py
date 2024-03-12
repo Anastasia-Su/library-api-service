@@ -87,7 +87,7 @@ class Profile(models.Model):
         return f"{self.first_name} {self.last_name}"
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name} ({get_user_model().email})"
+        return f"{self.first_name} {self.last_name} ({self.user})"
 
     class Meta:
         ordering = ["id", "last_name"]
