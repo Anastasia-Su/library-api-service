@@ -4,6 +4,8 @@ import stripe
 from django.conf import settings
 from django.db import transaction
 from django.shortcuts import redirect, get_object_or_404
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -54,8 +56,6 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             return [IsCurrentlyLoggedIn()]
         if self.action in ["update", "partial_update", "destroy"]:
             return [IsAdminUser()]
-        if self.request.user.is_superuser:
-            return [IsAuthenticated()]
 
         return [IsAuthenticated()]
 
@@ -139,35 +139,62 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.query_params.get("user")
-        is_active = self.request.query_params.get("is_active")
+        returned = self.request.query_params.get("returned")
         fines = self.request.query_params.get("fines")
 
         queryset = self.queryset.all()
 
         if not self.request.user.is_superuser:
             queryset = queryset.filter(
-                user=self.request.user, paid=True, cancelled=False
+                user=self.request.user,
+                paid=True,
+                cancelled=False,
+                returned__isnull=True,
             )
 
         if user:
             user_id = int(user)
             queryset = queryset.filter(user__id=user_id)
 
-        if is_active:
-            if is_active.lower() == "true":
-                queryset = queryset.filter(returned__isnull=True)
-            elif is_active.lower() == "false":
+        if returned:
+            if returned.lower() == "true":
                 queryset = queryset.filter(returned__isnull=False)
+            elif returned.lower() == "false":
+                queryset = queryset.filter(returned__isnull=True)
             else:
                 return Borrowing.objects.none()
 
         if fines:
             if fines.lower() == "true":
                 queryset = queryset.filter(fines_applied__isnull=False)
+            elif fines.lower() == "false":
+                queryset = queryset.filter(fines_applied__isnull=True)
             else:
                 return Borrowing.objects.none()
 
         return queryset
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "user",
+                type=OpenApiTypes.INT,
+                description="Filter by user id (ex. ?user=2)",
+            ),
+            OpenApiParameter(
+                "returned",
+                type=OpenApiTypes.BOOL,
+                description="Filter by returned status (ex. ?returned=true)",
+            ),
+            OpenApiParameter(
+                "fines",
+                type=OpenApiTypes.BOOL,
+                description="Filter by fines presence (ex. ?fines=false)",
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -194,8 +221,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return [IsAdminUser()]
         if self.action == "refund_payment":
             return [IsCurrentlyLoggedIn()]
-        if self.request.user.is_superuser:
-            return [IsAuthenticated()]
 
         return [IsAuthenticated()]
 
@@ -291,6 +316,18 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "user",
+                type=OpenApiTypes.INT,
+                description="Filter by user id (ex. ?user=2)",
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
 
 class FinesViewSet(viewsets.ModelViewSet):
     queryset = Fines.objects.select_related("user__profile", "borrowing")
@@ -375,3 +412,15 @@ class FinesViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(user__id=user_id)
 
         return queryset
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "user",
+                type=OpenApiTypes.INT,
+                description="Filter by user id (ex. ?user=2)",
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)

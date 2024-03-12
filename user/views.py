@@ -1,3 +1,6 @@
+from django.db.models import Q
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import generics, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -87,3 +90,28 @@ class ProfileViewSet(viewsets.ModelViewSet):
             return ProfileDetailSerializer
 
         return ProfileSerializer
+
+    def get_queryset(self):
+        user = self.request.query_params.get("user")
+        queryset = self.queryset
+
+        if user:
+            queryset = queryset.filter(
+                Q(user__email__icontains=user)
+                | Q(user__first_name__icontains=user)
+                | Q(user__last_name__icontains=user)
+            )
+
+        return queryset.distinct()
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "user",
+                type=OpenApiTypes.STR,
+                description="Filter by user (ex. ?user=ja)",
+            )
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
