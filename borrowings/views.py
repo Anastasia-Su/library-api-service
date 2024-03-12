@@ -123,8 +123,8 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             book_instance.save()
 
             if borrowing.expected_return_date < date.today():
-                borrowing.fines_applied = calculate_fines(borrowing.id)
-                borrowing.save()
+                # borrowing.fines_applied = calculate_fines(borrowing.id)
+                # borrowing.save()
 
                 return redirect("/api/borrowings/fines/")
 
@@ -137,6 +137,7 @@ class BorrowingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.query_params.get("user")
         is_active = self.request.query_params.get("is_active")
+        fines = self.request.query_params.get("fines")
         queryset = self.queryset
 
         if not self.request.user.is_superuser:
@@ -156,11 +157,17 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             else:
                 return Borrowing.objects.none()
 
+        if fines:
+            if fines.lower() == "true":
+                queryset = queryset.filter(fines_applied__isnull=False)
+            else:
+                return Borrowing.objects.none()
+
         return queryset
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
-    queryset = Payment.objects.select_related("user", "borrowing")
+    queryset = Payment.objects.select_related("user__profile", "borrowing")
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated]
 
@@ -269,18 +276,18 @@ class PaymentViewSet(viewsets.ModelViewSet):
         user = self.request.query_params.get("user")
         queryset = self.queryset
 
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(user=self.request.user)
+
         if user:
             user_id = int(user)
             queryset = queryset.filter(user__id=user_id)
-
-        if not self.request.user.is_superuser:
-            queryset = queryset.filter(user=self.request.user)
 
         return queryset
 
 
 class FinesViewSet(viewsets.ModelViewSet):
-    queryset = Fines.objects.select_related("user", "borrowing")
+    queryset = Fines.objects.select_related("user__profile", "borrowing")
     serializer_class = FinesSerializer
     permission_classes = [IsAuthenticated]
 
@@ -302,6 +309,7 @@ class FinesViewSet(viewsets.ModelViewSet):
 
         return [IsAuthenticated()]
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         stripe.api_key = settings.STRIPE_SECRET_KEY
         borrowing_id = request.data.get("borrowing")

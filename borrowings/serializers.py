@@ -194,7 +194,10 @@ class FinesSerializer(serializers.ModelSerializer):
 
         if request.user and "borrowing" in self.fields:
             self.fields["borrowing"].queryset = Borrowing.objects.filter(
-                user=request.user, fines_applied__isnull=False, fines_paid=False
+                user=request.user,
+                fines_applied__isnull=False,
+                fines_paid=False,
+                returned__isnull=False,
             )
 
     class Meta:
