@@ -25,7 +25,6 @@ from drf_spectacular.views import (
     SpectacularRedocView,
 )
 
-# from borrowings.views import telegram_webhook
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -43,6 +42,5 @@ urlpatterns = [
         SpectacularRedocView.as_view(url_name="schema"),
         name="redoc",
     ),
-
     path("__debug__/", include("debug_toolbar.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

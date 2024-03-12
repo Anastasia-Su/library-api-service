@@ -54,7 +54,7 @@ class Payment(models.Model):
     )
 
     def __str__(self):
-        return f"{self.card_number}\n{self.expiry_year}/{self.expiry_month}"
+        return f"{self.user}: {self.amount_paid}\nfor {self.borrowing.book}"
 
 
 class Fines(models.Model):
@@ -79,4 +79,8 @@ class Fines(models.Model):
     )
 
     def __str__(self):
-        return f"{self.fines_paid} by {self.user}"
+        return f"{self.fines_paid}, paid by {self.user}"
+
+    class Meta:
+        verbose_name = "fines"
+        verbose_name_plural = "fines"

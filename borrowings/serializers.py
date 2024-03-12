@@ -45,10 +45,12 @@ class BorrowingListSerializer(BorrowingSerializer):
     user = serializers.SerializerMethodField(read_only=True)
     borrowed = serializers.SerializerMethodField(read_only=True)
 
-    def get_borrowed(self, obj):
+    @staticmethod
+    def get_borrowed(obj):
         return f"from {obj.borrow_date} to {obj.expected_return_date}"
 
-    def get_user(self, obj):
+    @staticmethod
+    def get_user(obj):
         return f"{obj.user.profile.full_name} ({obj.user.email})"
 
     class Meta:
@@ -72,7 +74,8 @@ class BorrowingDetailSerializer(BorrowingListSerializer):
     book = serializers.StringRelatedField(read_only=True)
     user = serializers.SerializerMethodField(read_only=True)
 
-    def get_user(self, obj):
+    @staticmethod
+    def get_user(obj):
         return f"{obj.user.profile.full_name} ({obj.user.email})"
 
     class Meta:
