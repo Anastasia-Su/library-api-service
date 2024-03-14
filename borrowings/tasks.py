@@ -45,7 +45,6 @@ def calculate_fines_daily():
     overdue_borrowings = Borrowing.objects.filter(
         expected_return_date__lt=date.today(), returned__isnull=True
     )
-    print(overdue_borrowings)
 
     for borrowing in overdue_borrowings:
         fines = calculate_fines(borrowing.id)
