@@ -31,7 +31,7 @@ from .serializers import (
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
 from library.models import Book
-from .tasks import delay_borrowing_create
+from .tasks import delay_borrowing_create, notify_about_borrowing_create
 from .utils import stripe_card_payment, calculate_fines, calculate_amount
 
 
@@ -70,6 +70,7 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         if book_instance.inventory > 0:
             book_instance.inventory -= 1
             book_instance.save()
+
             #
             # task_result = delay_borrowing_create.apply_async(
             #     args=[
@@ -247,6 +248,18 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 borrowing.payment = serializer.instance
                 borrowing.stripe_payment_id = response["stripe_payment_id"]
                 borrowing.save()
+
+                # notify_about_borrowing_create.delay(borrowing_id)
+
+                task_result = notify_about_borrowing_create.apply_async(
+                    args=[borrowing_id, request.user.id], countdown=0
+                )
+
+                if not task_result:
+                    return Response(
+                        {"error": "Failed to schedule task"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
 
             return Response(response)
 

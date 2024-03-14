@@ -10,6 +10,8 @@ from django.core.management.base import BaseCommand
 from borrowings.models import Borrowing
 from telebot import types
 
+from user.models import Profile
+
 
 class TelegramBot:
     def __init__(self):
@@ -81,6 +83,12 @@ class TelegramBot:
                     self.bot.send_message(
                         chat_id, "What do you want to do?", reply_markup=markup
                     )
+
+                    user_profile = Profile.objects.get(user__email=self.user_email)
+
+                    user_profile.telegram_chat_id = chat_id
+                    user_profile.save()
+
                 else:
                     self.bot.send_message(
                         chat_id, "Verification code incorrect. Please try again."

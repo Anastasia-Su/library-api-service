@@ -1,14 +1,19 @@
 from datetime import date
 
+import telebot
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from celery import shared_task
 from django.db import transaction
+from django.urls import reverse_lazy
 
 from library.models import Book
 from rest_framework.response import Response
 
 from borrowings.models import Borrowing
 from borrowings.utils import calculate_fines
+
+from user.models import Profile
 
 
 @shared_task
@@ -47,3 +52,35 @@ def calculate_fines_daily():
         if borrowing.fines_applied != fines:
             borrowing.fines_applied = fines
             borrowing.save()
+
+
+@shared_task
+def notify_about_borrowing_create(
+    borrowing_id, user_id
+) -> int | Exception | str | Response:
+    from .models import Borrowing
+
+    try:
+        borrowing = Borrowing.objects.get(pk=borrowing_id)
+        user = get_user_model().objects.get(pk=user_id)
+        borrowing_url = reverse_lazy(
+            "borrowings:borrowings-detail", kwargs={"pk": borrowing_id}
+        )
+
+        notification_message = (
+            f"New borrowing created:\n"
+            f"{borrowing.book.title} by {borrowing.book.author}\n"
+            f"Please return it by:"
+            f" {borrowing.expected_return_date}\n"
+            f"View details: {settings.BASE_URL}{borrowing_url}"
+        )
+
+        bot = telebot.TeleBot(settings.TELEGRAM["bot_token"])
+        profile = Profile.objects.get(user=user)
+        chat_id = profile.telegram_chat_id
+
+        if chat_id:
+            bot.send_message(chat_id, notification_message)
+
+    except Exception as e:
+        return str(e)
