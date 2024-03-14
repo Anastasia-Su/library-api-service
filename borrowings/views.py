@@ -60,18 +60,12 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
-        book_id = request.data.get("book")
-        book_instance = Book.objects.get(pk=book_id)
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
 
-        if book_instance.inventory > 0:
-            book_instance.inventory -= 1
-            book_instance.save()
+        if serializer.instance.book.inventory > 0:
 
-            #
             # task_result = delay_borrowing_create.apply_async(
             #     args=[
             #         request.user.id, book_id, serializer.data
@@ -249,7 +243,11 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 borrowing.stripe_payment_id = response["stripe_payment_id"]
                 borrowing.save()
 
-                # notify_about_borrowing_create.delay(borrowing_id)
+                book_instance = Book.objects.get(
+                    pk=serializer.instance.borrowing.book.id
+                )
+                book_instance.inventory -= 1
+                book_instance.save()
 
                 task_result = notify_about_borrowing_create.apply_async(
                     args=[borrowing_id, request.user.id], countdown=0
