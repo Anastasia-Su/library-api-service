@@ -31,6 +31,8 @@ SECRET_KEY = os.environ["SECRET_KEY"]
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+BASE_URL = "https://127.0.0.1:8000"
+
 
 INTERNAL_IPS = [
     "127.0.0.1",

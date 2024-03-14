@@ -81,6 +81,7 @@ class Profile(models.Model):
     image = models.ImageField(
         null=True, blank=True, upload_to=profile_picture_file_path
     )
+    telegram_chat_id = models.CharField(max_length=255, null=True)
 
     @property
     def full_name(self):

@@ -4,6 +4,7 @@ import stripe
 from django.conf import settings
 from django.db import transaction
 from django.shortcuts import redirect, get_object_or_404
+from django.urls import reverse_lazy
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets, status
@@ -31,7 +32,7 @@ from .serializers import (
 from library.permissions import IsAuthenticatedReadOnly, IsCurrentlyLoggedIn
 
 from library.models import Book
-from .tasks import delay_borrowing_create
+from .tasks import delay_borrowing_create, notify_about_borrowing_create
 from .utils import stripe_card_payment, calculate_fines, calculate_amount
 
 
@@ -60,17 +61,12 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
-        book_id = request.data.get("book")
-        book_instance = Book.objects.get(pk=book_id)
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
 
-        if book_instance.inventory > 0:
-            book_instance.inventory -= 1
-            book_instance.save()
-            #
+        if serializer.instance.book.inventory > 0:
+
             # task_result = delay_borrowing_create.apply_async(
             #     args=[
             #         request.user.id, book_id, serializer.data
@@ -84,7 +80,7 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             #         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             #     )
 
-            return redirect("/api/borrowings/payments/")
+            return redirect("borrowings:payments-list")
 
         return Response(
             {"error": "This book is not currently available"},
@@ -129,7 +125,7 @@ class BorrowingViewSet(viewsets.ModelViewSet):
                 borrowing.fines_applied = calculate_fines(borrowing.id)
                 borrowing.save()
 
-                return redirect("/api/borrowings/fines/")
+                return redirect("borrowings:fines-list")
 
             return Response(
                 {"success": "Borrowing returned"}, status=status.HTTP_201_CREATED
@@ -247,6 +243,22 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 borrowing.payment = serializer.instance
                 borrowing.stripe_payment_id = response["stripe_payment_id"]
                 borrowing.save()
+
+                book_instance = Book.objects.get(
+                    pk=serializer.instance.borrowing.book.id
+                )
+                book_instance.inventory -= 1
+                book_instance.save()
+
+                task_result = notify_about_borrowing_create.apply_async(
+                    args=[borrowing_id, request.user.id], countdown=0
+                )
+
+                if not task_result:
+                    return Response(
+                        {"error": "Failed to schedule task"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
 
             return Response(response)
 
