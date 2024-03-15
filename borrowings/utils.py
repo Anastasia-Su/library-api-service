@@ -23,8 +23,9 @@ def calculate_fines(borrowing_id):
     fine_multiplier = Decimal(1.2)
     borrowing = Borrowing.objects.get(pk=borrowing_id)
 
-    # IF YOU USE CELERY, PLEASE CHANGE borrowing.returned TO date.today()
-    duration = borrowing.returned - borrowing.expected_return_date
+    # IF YOU DON'T USE CELERY, PLEASE CHANGE
+    # date.today() to borrowing.returned
+    duration = date.today() - borrowing.expected_return_date
     if duration.days > 0:
         amount_dollars = borrowing.book.daily_fee * duration.days * fine_multiplier
     else:

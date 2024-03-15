@@ -104,7 +104,8 @@ class TelegramBot:
                 )
                 self.bot.send_message(
                     chat_id,
-                    f"A verification code has been sent to {message.text}. Please enter the code here.",
+                    f"A verification code has been sent to "
+                    f"{message.text}. Please enter the code here.",
                 )
 
                 self.user_email = message.text

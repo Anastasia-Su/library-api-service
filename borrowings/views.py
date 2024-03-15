@@ -121,9 +121,10 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             book_instance.save()
 
             if borrowing.expected_return_date < date.today():
-                # IF YOU USE CELERY, PLEASE REMOVE FOLLOWING TWO LINES
-                borrowing.fines_applied = calculate_fines(borrowing.id)
-                borrowing.save()
+                # IF YOU DON't USE CELERY, PLEASE UNCOMMENT FOLLOWING TWO LINES
+
+                # borrowing.fines_applied = calculate_fines(borrowing.id)
+                # borrowing.save()
 
                 return redirect("borrowings:fines-list")
 
