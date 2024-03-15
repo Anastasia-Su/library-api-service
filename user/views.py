@@ -54,7 +54,8 @@ class LogoutView(generics.GenericAPIView):
     permission_classes = [IsCurrentlyLoggedIn]
     serializer_class = LogoutSerializer
 
-    def post(self, request):
+    @staticmethod
+    def post(request):
         try:
             refresh_token = request.data["refresh_token"]
             if not refresh_token:
@@ -92,25 +93,32 @@ class ProfileViewSet(viewsets.ModelViewSet):
         return ProfileSerializer
 
     def get_queryset(self):
-        user = self.request.query_params.get("user")
+        name = self.request.query_params.get("name")
+        email = self.request.query_params.get("email")
         queryset = self.queryset
 
-        if user:
+        if name:
             queryset = queryset.filter(
-                Q(user__email__icontains=user)
-                | Q(user__first_name__icontains=user)
-                | Q(user__last_name__icontains=user)
+                Q(first_name__icontains=name) | Q(last_name__icontains=name)
             )
+
+        if email:
+            queryset = queryset.filter(user__email__icontains=email)
 
         return queryset.distinct()
 
     @extend_schema(
         parameters=[
             OpenApiParameter(
-                "user",
+                "name",
                 type=OpenApiTypes.STR,
-                description="Filter by user (ex. ?user=ja)",
-            )
+                description="Filter by user first or last name (ex. ?name=ja)",
+            ),
+            OpenApiParameter(
+                "email",
+                type=OpenApiTypes.STR,
+                description="Filter by user email (ex. ?email=admin@)",
+            ),
         ]
     )
     def list(self, request, *args, **kwargs):
