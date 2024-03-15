@@ -1,10 +1,4 @@
-import tempfile
-import os
 from datetime import date, timedelta, datetime
-from decimal import Decimal
-
-from PIL import Image
-from decimal import ROUND_UP
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
