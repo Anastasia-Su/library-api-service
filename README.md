@@ -1,5 +1,5 @@
 
-# Library API service
+# Library API Service
 
 API service for library, written on DRF.
 
