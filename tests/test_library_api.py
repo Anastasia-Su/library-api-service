@@ -1,9 +1,4 @@
-import tempfile
-import os
-from decimal import Decimal
-
-from PIL import Image
-from decimal import ROUND_UP
+from decimal import Decimal, ROUND_UP
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -15,6 +10,10 @@ from library.models import Book
 from library.serializers import BookSerializer, BookListSerializer, BookDetailSerializer
 
 BOOK_URL = reverse("library:books-list")
+
+
+def detail_url(book_id):
+    return reverse("library:books-detail", args=[book_id])
 
 
 def payload():
@@ -38,31 +37,6 @@ def sample_book(i, **params):
     defaults.update(params)
 
     return Book.objects.create(**defaults)
-
-
-# def sample_journey(i, **params):
-#     station1 = Station.objects.create(name=f"ST{i}", latitude=1.1, longitude=6.8)
-#     station2 = Station.objects.create(name=f"ST{i + 1}", latitude=9.1, longitude=56.8)
-#     route = Route.objects.create(source=station1, destination=station2)
-#
-#     defaults = {
-#         "departure_time": "2024-01-11 14:00:00",
-#         "arrival_time": "2024-01-12 06:00:00",
-#         "book": sample_book(i),
-#         "route": route,
-#     }
-#     defaults.update(params)
-#
-#     return Journey.objects.create(**defaults)
-
-
-# def image_upload_url(profile_id):
-#     """Return URL for recipe image upload"""
-#     return reverse("station:book-upload-image", args=[book_id])
-
-
-def detail_url(book_id):
-    return reverse("library:books-detail", args=[book_id])
 
 
 class UnauthenticatedBookApiTests(TestCase):

@@ -197,7 +197,6 @@ class AuthenticatedProfileApiTests(TestCase):
         self.assertIn("image", res.data[0].keys())
 
 
-
 class AdminProfileApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()

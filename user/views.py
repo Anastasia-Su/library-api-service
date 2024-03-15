@@ -110,10 +110,15 @@ class ProfileViewSet(viewsets.ModelViewSet):
     @extend_schema(
         parameters=[
             OpenApiParameter(
-                "user",
+                "name",
                 type=OpenApiTypes.STR,
-                description="Filter by user (ex. ?user=ja)",
-            )
+                description="Filter by user first or last name (ex. ?name=ja)",
+            ),
+            OpenApiParameter(
+                "email",
+                type=OpenApiTypes.STR,
+                description="Filter by user email (ex. ?email=admin@)",
+            ),
         ]
     )
     def list(self, request, *args, **kwargs):
