@@ -4,7 +4,6 @@ import stripe
 from django.conf import settings
 from django.db import transaction
 from django.shortcuts import redirect, get_object_or_404
-from django.urls import reverse_lazy
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets, status
@@ -66,20 +65,6 @@ class BorrowingViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
 
         if serializer.instance.book.inventory > 0:
-
-            # task_result = delay_borrowing_create.apply_async(
-            #     args=[
-            #         request.user.id, book_id, serializer.data
-            #     ],
-            #     countdown=60
-            # )
-            #
-            # if not task_result:
-            #     return Response(
-            #         {"error": "Failed to schedule task"},
-            #         status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            #     )
-
             return redirect("borrowings:payments-list")
 
         return Response(
